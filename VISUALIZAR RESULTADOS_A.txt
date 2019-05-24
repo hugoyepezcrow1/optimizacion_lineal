@@ -1,0 +1,24 @@
+expand Total_Cost;
+
+solve;
+
+option omit_zero_cols 1;
+option omit_zero_rows 1;
+printf"\ valor de la funcion objetivo:\n";	
+display Total_Cost;
+
+printf"\ valores de distribucion:\n";	
+
+display x, w, y, z, x, alpha, beta, gamma;
+
+display c1.body;
+display c2.body;
+display c9.body;
+
+display sum{k in BODEGAS, t in PERIODOS}(alpha[k,t]*reembolso);
+display sum{k in BODEGAS, t in PERIODOS}(beta[k,t]*sobrecosto_bodega[k]);
+display sum{l in PRODUCTOS, i in PLANTAS, k in BODEGAS, t in PERIODOS}(y[l,i,k,t]*costo_etiqueta[l,k]);
+
+
+
+

@@ -1,0 +1,122 @@
+####################################################################
+#CONJUNTOS
+set PLANTAS;        # origins
+set BODEGAS;        # destinations
+set PRODUCTOS;      # products
+set CLIENTES;       # clientes
+set PERIODOS;       # periodos
+set SUBPERIODOS;    # subperiodos
+
+######################################################################
+#PARAMETROS
+
+param capacidad_produccion {i in PLANTAS, t in PERIODOS} integer >=0; # Capacidad de produccion de cierto producto en cierta planta
+
+param costo_producto{l in PRODUCTOS}>=0; # Costo de cada producto
+
+param demanda_cliente{j in CLIENTES,l in PRODUCTOS,t in PERIODOS} integer >=0; # demanda del cliente del producto l en el periodo t
+
+param costo_arriendo{k in BODEGAS,t in PERIODOS}>=0; # costo de arriendo de la bodega
+
+param costo_etiqueta{l in PRODUCTOS,k in BODEGAS}>=0; #costo de etiquetar cada unidad de cierto producto en determinada bodega
+
+param capacidad_bodega{k in BODEGAS} integer>=0; # capacidad de cada bodega en unidades de articulos sin importar el producto.
+
+param sobrecosto_bodega{k in BODEGAS}>=0;
+
+param costou_transporte_uno {l in PRODUCTOS, i in PLANTAS,k in BODEGAS, t in PERIODOS}>=0; #costo de transporte desde fabrica a bodega
+
+param costou_transporte_dos {l in PRODUCTOS, k in BODEGAS,j in CLIENTES,t in PERIODOS}>=0;  #costo de transporte desde bodega a cliente
+
+param reembolso>=0;            #Valor de reembolso por uso de 3 periodos consecutivos en pesos colombianos
+
+param L{k in BODEGAS}integer>=0;      #Despacho minimo de cantidad de unidades de articulo
+
+param U{k in BODEGAS}integer>=0;      #Despacho maximo de cantidad de unidades de articulo
+
+param M>=0;                    # cota superior
+########################################################################
+#VARIABLES BINARIAS
+
+var x{k in BODEGAS, t in PERIODOS} binary; # si se arrienda la bodega k en el periodo t
+var alpha{k in BODEGAS, t in PERIODOS} binary; # si se arrienda la bodega k en los periodos t, t+1 y t+2
+var beta{k in BODEGAS, t in PERIODOS} binary; # si supera la capacidad de despacho de bodega
+var gamma{k in BODEGAS, j in CLIENTES, t in PERIODOS} binary; # Si la bodega abastece al cliente j en el periodo t
+###################################################################################
+#VARIABLES CONTINUAS
+
+var w{l in PRODUCTOS, i in PLANTAS, t in PERIODOS} integer>=0; # unidades de producto del tipo l producidos en la planta i en el periodo t
+var y{l in PRODUCTOS, i in PLANTAS, k in BODEGAS, t in PERIODOS} integer >=0; # unidades de producto desde la planta i hasta la bodega k en el periodo t
+var z{l in PRODUCTOS, k in BODEGAS, j in CLIENTES, t in PERIODOS} integer >=0; # unidades de producto l desde la bodega k hasta el cliente j en el periodo t
+
+###################################################################################
+#FUNCION OBJETIVO
+
+minimize Total_Cost:
+sum{l in PRODUCTOS, i in PLANTAS, t in PERIODOS} ( costo_producto[l]*w[l,i,t]) + 
+sum{l in PRODUCTOS, i in PLANTAS, k in BODEGAS, t in PERIODOS}(y[l,i,k,t]*costo_etiqueta[l,k]) +
+sum{l in PRODUCTOS, i in PLANTAS, k in BODEGAS, t in PERIODOS}(y[l,i,k,t]*costou_transporte_uno[l,i,k,t]) +
+sum{l in PRODUCTOS, k in BODEGAS, j in CLIENTES, t in PERIODOS}(z[l,k,j,t]*costou_transporte_dos[l,k,j,t]) + 
+sum{k in BODEGAS, t in PERIODOS}(x[k,t]*costo_arriendo[k,t]) + 
+sum{k in BODEGAS, t in PERIODOS}(beta[k,t]*sobrecosto_bodega[k])- 
+sum{k in BODEGAS, t in PERIODOS}(alpha[k,t]*reembolso);
+
+##############################################################################
+#RESTRICCIONES
+
+
+# c1 Capacidad de produccion de las plantas
+
+subject to c1 {i in PLANTAS,  t in PERIODOS}: sum {l in PRODUCTOS, k in BODEGAS} y[l,i,k,t] <= capacidad_produccion[i,t];
+
+
+# c2 Satisfaccion de demanda
+
+subject to c2 {l in PRODUCTOS, j in CLIENTES,  t in PERIODOS}: sum {k in BODEGAS} z[l,k,j,t] = demanda_cliente[j,l,t];
+
+# c3  Conservacion de flujo en plantas
+
+subject to c3 {i in PLANTAS,l in PRODUCTOS,t in PERIODOS}:w[l,i,t] = sum{k in BODEGAS}y[l,i,k,t];
+
+
+# c4 Conservacion de flujo en bodegas
+
+subject to c4 {k in BODEGAS, l in PRODUCTOS, t in PERIODOS}: sum {i in PLANTAS} y[l,i,k,t] = sum{j in CLIENTES}z[l,k,j,t];
+
+
+# c5 Abastecimiento desde una sola bodega
+
+subject to c5 {j in CLIENTES, t in PERIODOS}: sum{k in BODEGAS} gamma[k,j,t] =1;
+
+# c6 Capacidad de las bodegas
+
+subject to c6{k in BODEGAS, t in PERIODOS}: sum{l in PRODUCTOS, j in CLIENTES} z[l,k,j,t]<=x[k, t]*capacidad_bodega[k];
+
+
+# c7 y 8 Relacion entre variables
+
+subject to c7{k in BODEGAS, j in CLIENTES, t in PERIODOS}: gamma[k,j,t]<=x[k,t];
+
+subject to c8{l in PRODUCTOS, k in BODEGAS, j in CLIENTES, t in PERIODOS}: z[l,k,j,t]<=gamma[k,j,t]*demanda_cliente[j,l,t];
+
+# c9 Despacho minimo de productos
+
+subject to c9{k in BODEGAS, t in PERIODOS}: sum{l in PRODUCTOS, j in CLIENTES} z[l,k,j,t]>= L[k]*x[k,t];
+
+# c10 11 y 12 Para pago de reembolso para un periodo de 4 
+
+subject to c10{k in BODEGAS, t in PERIODOS}: 3*alpha[k,t]<= sum{s in t..min(4,t+2)} x[k,s];
+
+subject to c11{ k in BODEGAS, t in PERIODOS}: sum{s in t..min(4,t+2)} x[k,s]<=(2+ alpha[k,t]);
+
+subject to c12{k in BODEGAS}: sum{t in PERIODOS} alpha[k,t] <= 1;
+
+
+# c13 Para pagos de horas extra a trabajadores
+
+ subject to c13 {t in PERIODOS, k in BODEGAS}:(sum{l in PRODUCTOS, j in CLIENTES}z[l,k,j,t])<=U[k]+beta[k,t]*M;
+
+
+
+
+
